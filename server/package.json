@@ -1,0 +1,13 @@
+{
+    "name": "video-kyc-server",
+    "version": "1.0.0",
+    "description": "WebSocket signaling server for Video KYC App",
+    "main": "server.js",
+    "scripts": {
+      "start": "node server.js"
+    },
+    "dependencies": {
+      "ws": "^8.13.0"
+    }
+  }
+  

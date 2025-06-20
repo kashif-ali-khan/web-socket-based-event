@@ -1,32 +1,29 @@
-const WebSocket = require('ws');
-const wss = new WebSocket.Server({ port: 8080 });
+const { Server } = require('socket.io');
+const io = new Server(8080, {
+  cors: { origin: '*' }
+});
 
 let clients = {};
 
-wss.on('connection', function connection(ws) {
-  ws.on('message', function incoming(message) {
-    const data = JSON.parse(message);
+io.on('connection', (socket) => {
+  socket.on('register', (from) => {
+    clients[from] = socket;
+    socket.userId = from;
+    console.log(`Registered: ${from}`);
+  });
+
+  socket.on('message', (data) => {
     const { type, to, from, payload } = data;
-
-    if (type === 'register') {
-      clients[from] = ws;
-      console.log(`Registered: ${from}`);
-      return;
-    }
-
     if (clients[to]) {
-      clients[to].send(JSON.stringify({ type, from, payload }));
+      clients[to].emit('message', { type, from, payload });
     }
   });
 
-  ws.on('close', () => {
-    for (const user in clients) {
-      if (clients[user] === ws) {
-        delete clients[user];
-        break;
-      }
+  socket.on('disconnect', () => {
+    if (socket.userId && clients[socket.userId]) {
+      delete clients[socket.userId];
     }
   });
 });
 
-console.log('WebSocket server running on ws://localhost:8080');
+console.log('Socket.IO server running on ws://localhost:8080');

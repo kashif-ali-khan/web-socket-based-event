@@ -1,22 +1,22 @@
 import { useEffect, useRef } from 'react';
+import { io } from 'socket.io-client';
 
 export const useWebSocket = (userId, onMessage) => {
   const socketRef = useRef(null);
 
   useEffect(() => {
-    socketRef.current = new WebSocket('ws://localhost:8080');
-    socketRef.current.onopen = () => {
-      socketRef.current.send(JSON.stringify({ type: 'register', from: userId }));
-    };
-    socketRef.current.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+    socketRef.current = io('ws://localhost:8080');
+    socketRef.current.on('connect', () => {
+      socketRef.current.emit('register', userId);
+    });
+    socketRef.current.on('message', (data) => {
       onMessage(data);
-    };
-    return () => socketRef.current.close();
+    });
+    return () => socketRef.current.disconnect();
   }, [userId]);
 
   const sendMessage = (type, to, payload = {}) => {
-    socketRef.current.send(JSON.stringify({ type, from: userId, to, payload }));
+    socketRef.current.emit('message', { type, from: userId, to, payload });
   };
 
   return sendMessage;

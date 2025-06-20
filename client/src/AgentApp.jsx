@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useWebSocket } from './useWebSocket';
 import Questionnaire from './Questionnaire';
 import ProgressBar from './ProgressBar';
 import SummaryTable from './SummaryTable';
+import { useACSContext } from './ACSProvider';
+import VideoCard from './VideoCard';
+import { v4 as uuidv4 } from 'uuid';
 
 const AgentApp = () => {
   const [logs, setLogs] = useState([]);
@@ -11,6 +14,18 @@ const AgentApp = () => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [startQuestion, setStartQuestion] = useState(false);
   const [responses, setResponses] = useState({});
+  const [groupId, setGroupId] = useState(null);
+
+  const { init, startCall, hangUp, localVideoStream, localAudioStream, remoteParticipants, deviceManager, setupStreams, call, isMuted, toggleMute } = useACSContext();
+
+  useEffect(() => {
+    if (deviceManager) {
+      setupStreams({ video: true, audio: true });
+    }
+  }, [deviceManager]);
+
+  const customerParticipant = remoteParticipants.find(p => p.videoStreams.some(s => s.isAvailable));
+  const customerStream = customerParticipant?.videoStreams.find(s => s.isAvailable);
 
   // Example questions
   const questions = [
@@ -31,6 +46,10 @@ const AgentApp = () => {
     }
     if (msg.type === 'response') {
       setLogs((prev) => [...prev, `Response to "${msg.payload.question}": ${msg.payload.response}`]);
+    }
+    if (msg.type === 'initiate_call') {
+        setGroupId(msg.payload.groupId);
+        setLogs((prev) => [...prev, `Received call initiation with Group ID: ${msg.payload.groupId}`]);
     }
   });
 
@@ -79,9 +98,65 @@ const AgentApp = () => {
     setCurrentQuestionIndex(newIndex);
   };
 
+  const handleJoinCall = () => {
+    const callOptions = {
+      videoOptions: { localVideoStreams: localVideoStream ? [localVideoStream] : [] },
+      audioOptions: {
+        muted: false,
+        localAudioStreams: localAudioStream ? [localAudioStream] : []
+      }
+    };
+    startCall(groupId, callOptions);
+  }
+
   return (
     <div>
       <h2>Agent App</h2>
+       <div style={{marginBottom: '24px'}}>
+        <h3>Video Call</h3>
+        {!call && <button onClick={handleJoinCall} disabled={!localVideoStream || !groupId}>Join Call</button>}
+        {call && (
+          <>
+            <button onClick={hangUp}>Hang Up</button>
+            <button onClick={toggleMute}>{isMuted ? 'Unmute' : 'Mute'}</button>
+          </>
+        )}
+        
+        <div style={{ 
+            position: 'relative', 
+            width: '640px', 
+            height: '480px', 
+            backgroundColor: '#f0f0f0', 
+            border: '1px solid #ccc',
+            borderRadius: '8px',
+            overflow: 'hidden',
+            marginTop: '10px'
+        }}>
+            {/* Remote (Customer) Video - Main View */}
+            {customerStream ? (
+                <VideoCard 
+                    stream={customerStream}
+                    displayName={customerParticipant.displayName || 'Customer'}
+                    containerStyle={{ width: '100%', height: '100%', margin: 0 }}
+                />
+            ) : (
+                <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#666'}}>
+                    {call ? 'Waiting for customer to share video...' : 'Waiting for customer to join...'}
+                </div>
+            )}
+
+            {/* Local (Agent) Video - Picture-in-Picture */}
+            {localVideoStream && (
+                <div style={{ position: 'absolute', top: 20, right: 20, width: 180, height: 135, zIndex: 100, border: '2px solid white', boxShadow: '0 0 10px rgba(0,0,0,0.5)' }}>
+                    <VideoCard 
+                        stream={localVideoStream} 
+                        displayName="Me (Agent)"
+                        containerStyle={{ width: '100%', height: '100%', margin: 0 }} 
+                    />
+                </div>
+            )}
+        </div>
+      </div>
       { startQuestion && (<> 
         <ProgressBar current={currentQuestionIndex} total={questions.length} questions={questions} responses={responses} />
         <Questionnaire 
